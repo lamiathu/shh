@@ -1,0 +1,29 @@
+   var builder = WebApplication.CreateBuilder(args);
+            var configuration = new ConfigurationBuilder()
+           .SetBasePath(Directory.GetCurrentDirectory())
+           .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}.json", optional: false, reloadOnChange: true)
+           .AddEnvironmentVariables()
+           .Build();
+
+            var dbSettings = AppSettingDbService.loadAppSettingFromDB(configuration, 60).Result;
+            var dbSettingsJson = JsonConvert.SerializeObject(dbSettings);
+            var jsonByte = Encoding.UTF8.GetBytes(dbSettingsJson);
+            var dbSettingsStream = new MemoryStream(jsonByte);
+            Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(config =>
+                {
+                    config.SetBasePath(Directory.GetCurrentDirectory())
+                          .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                          .AddJsonStream(dbSettingsStream)
+                          .AddEnvironmentVariables();
+                });
+
+            builder.Services.AddHangfire(configuration =>
+            {
+                if (builder.Configuration.GetValue<int>("ConnectionType") == 2)
+                {
+                    GlobalConfiguration.Configuration.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                   .UseSimpleAssemblyNameTypeSerializer()
+                    .UseRecommendedSerializerSettings()
+                   .UseRedisStorage(builder.Configuration.GetConnectionString("Connection"), new RedisStorageOptions { Prefix = "streams.communication.announcements:hangfire }:" });
+                }
